@@ -99,4 +99,5 @@ func main() {
 	changeLEDToNormal()
 	http.HandleFunc("/", handler)
 	http.ListenAndServe(":8080", nil)
+	log.Println("Serving on Port 8080")
 }
