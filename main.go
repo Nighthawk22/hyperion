@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os/exec"
 	"strconv"
+	"time"
 )
 
 var alertCounter int
@@ -19,6 +20,11 @@ const (
 	dark       = "0"
 	ledCommand = "/usr/local/bin/pigs"
 )
+
+type alertManagerAlerts struct {
+	Status 		string `json:"status"`
+	Alerts		[]prometheusAlert	`json:"data"`
+}
 
 type prometheusAlert struct {
 	Labels      string `json:"labels"`
@@ -94,10 +100,53 @@ func handler(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprintf(w, "NR of alerts "+strconv.Itoa(alertCounter))
 
 }
-func main() {
+
+func startWebServer() {
 	alertCounter = 0
-	changeLEDToNormal()
 	http.HandleFunc("/", handler)
 	http.ListenAndServe(":8080", nil)
 	log.Println("Serving on Port 8080")
+}
+
+func requestAlertManager(alertManagerIp string) {
+	resp, err := http.Get(fmt.Sprint("%s/api/v1/alerts"))
+	if err != nil {
+		log.Printf("Could not retrieve api")
+		return
+	}
+	var alertManagerResponse []alertManagerAlerts
+	json.NewDecoder(resp.Body).Decode(alertManagerResponse)
+
+
+}
+
+
+func pollingAlertManager(alertManagerIp string, pollingInterval int) {
+	ticker := time.NewTicker(pollingInterval * time.Second)
+	go func() {
+		for t := range ticker.C {
+			requestAlertManager(alertManagerIp)
+		}
+	}
+}
+
+
+func main() {
+	changeLEDToNormal()
+	webServerMod := flag.Bool("web", false, "Starting Webserver for pushing alerts")
+	alertManagerIp := flag.String("url", "", "url of the Altermanager for polling alert status")
+	pollingInterval := flag.Int("interval", 3, "Polling interval in seconds")
+
+	if webServerMod {
+		startWebServer()
+	} else {
+		if !alertManagerIp || !pollingInterval {
+			log.Fatal("Flags not provided. Aborting")
+		} else {
+			pollingAlertManager(*alertManagerIp, *pollingInterval)
+		}
+	}
+
+
+	
 }
