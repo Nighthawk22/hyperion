@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"flag"
 	"fmt"
 	"log"
 	"net/http"
@@ -22,8 +23,8 @@ const (
 )
 
 type alertManagerAlerts struct {
-	Status 		string `json:"status"`
-	Alerts		[]prometheusAlert	`json:"data"`
+	Status string            `json:"status"`
+	Alerts []prometheusAlert `json:"data"`
 }
 
 type prometheusAlert struct {
@@ -55,6 +56,7 @@ func countAlerts(alertNotification prometheusAlertNotification) {
 }
 
 func changeLEDToAlert() {
+	log.Printf("Changing LED to alert!")
 	err := exec.Command(ledCommand, "p", bluePort, dark).Run()
 	if err != nil {
 		log.Println(err)
@@ -67,6 +69,7 @@ func changeLEDToAlert() {
 }
 
 func changeLEDToNormal() {
+	log.Printf("Changing alert to normal!")
 	err := exec.Command(ledCommand, "p", redPort, dark).Run()
 	if err != nil {
 		log.Println(err)
@@ -108,45 +111,59 @@ func startWebServer() {
 	log.Println("Serving on Port 8080")
 }
 
-func requestAlertManager(alertManagerIp string) {
-	resp, err := http.Get(fmt.Sprint("%s/api/v1/alerts"))
+func requestAlertManager(alertManagerURL string) (alertManagerAlerts, error) {
+	var alertManagerResponse alertManagerAlerts
+	resp, err := http.Get(fmt.Sprintf("%s/api/v1/alerts", alertManagerURL))
 	if err != nil {
 		log.Printf("Could not retrieve api")
-		return
+		return alertManagerResponse, err
 	}
-	var alertManagerResponse []alertManagerAlerts
-	json.NewDecoder(resp.Body).Decode(alertManagerResponse)
-
-
+	err = json.NewDecoder(resp.Body).Decode(&alertManagerResponse)
+	return alertManagerResponse, err
 }
 
-
-func pollingAlertManager(alertManagerIp string, pollingInterval int) {
-	ticker := time.NewTicker(pollingInterval * time.Second)
-	go func() {
-		for t := range ticker.C {
-			requestAlertManager(alertManagerIp)
+func countAlertsFromManagerResponse(alertManagerReponse alertManagerAlerts) {
+	var isAlert bool
+	for _, alert := range alertManagerReponse.Alerts {
+		if alert.EndsAt == "0001-01-01T00:00:00Z" {
+			changeLEDToAlert()
+			isAlert = true
+			return
 		}
 	}
+
+	if !isAlert {
+		changeLEDToNormal()
+	}
 }
 
+func pollingAlertManager(alertManagerURL string, pollingInterval int) {
+	log.Printf("Start polling alertmanager on url %s", alertManagerURL)
+	ticker := time.NewTicker(time.Duration(pollingInterval) * time.Second)
+
+	for range ticker.C {
+		alertManagerResponse, err := requestAlertManager(alertManagerURL)
+		if err != nil {
+			log.Print(err)
+		}
+		countAlertsFromManagerResponse(alertManagerResponse)
+	}
+}
 
 func main() {
 	changeLEDToNormal()
 	webServerMod := flag.Bool("web", false, "Starting Webserver for pushing alerts")
-	alertManagerIp := flag.String("url", "", "url of the Altermanager for polling alert status")
+	alertManagerURL := flag.String("url", "", "url of the Altermanager for polling alert status")
 	pollingInterval := flag.Int("interval", 3, "Polling interval in seconds")
+	flag.Parse()
 
-	if webServerMod {
+	if *webServerMod {
 		startWebServer()
 	} else {
-		if !alertManagerIp || !pollingInterval {
+		if *alertManagerURL == "" {
 			log.Fatal("Flags not provided. Aborting")
 		} else {
-			pollingAlertManager(*alertManagerIp, *pollingInterval)
+			pollingAlertManager(*alertManagerURL, *pollingInterval)
 		}
 	}
-
-
-	
 }
