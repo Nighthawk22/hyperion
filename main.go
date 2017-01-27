@@ -17,6 +17,8 @@ const (
 	redPort    = "17"
 	greenPort  = "22"
 	bluePort   = "24"
+	lightBlue  = "50"
+	lightRed   = "200"
 	light      = "20"
 	dark       = "0"
 	ledCommand = "/usr/local/bin/pigs"
@@ -62,7 +64,7 @@ func changeLEDToAlert() {
 		log.Println(err)
 	}
 
-	err = exec.Command(ledCommand, "p", redPort, light).Run()
+	err = exec.Command(ledCommand, "p", redPort, lightRed).Run()
 	if err != nil {
 		log.Println(err)
 	}
@@ -74,7 +76,7 @@ func changeLEDToNormal() {
 	if err != nil {
 		log.Println(err)
 	}
-	err = exec.Command(ledCommand, "p", bluePort, light).Run()
+	err = exec.Command(ledCommand, "p", bluePort, lightBlue).Run()
 	if err != nil {
 		log.Println(err)
 	}
