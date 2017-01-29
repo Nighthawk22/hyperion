@@ -1,6 +1,3 @@
-before_script:
-    - add-apt-repository ppa:ubuntu-lxc/lxd-stable && apt-get update && apt-get install golang
-
 led-alertmanager:
     script:
         - make
