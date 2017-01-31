@@ -1,4 +1,4 @@
-hyperion: main.go
-	env GOOS=linux GOARCH=arm GOARM=5 go build -o hyperion main.go
+hyperion: **/*.go
+	env GOOS=linux GOARCH=arm GOARM=5 go build -o hyperion ./cmd/main.go
 test:
 	go test -v
