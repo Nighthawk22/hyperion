@@ -1,6 +1,6 @@
 # Hyperion: An LED Alertmanager
 
-Hyperion is used for polling or receiving alerts form the Prometheus
+Hyperion is used for polling  alerts form the Prometheus
 Alertmanager.  If an alert is found then the color of the LEDs changes to
 red. If there is no alert the color will be blue.
 
