@@ -1,43 +1,37 @@
+// Copyright 2018 Hyperion Team
+//
+// Licensed under the Apache License, Version 2.0 (the "License"); you may not
+// use this file except in compliance with the License.  You may obtain a copy
+// of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+// WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.  See the
+// License for the specific language governing permissions and limitations under
+// the License.
 package main
 
 import (
-	"os"
-	"time"
+	"flag"
+	"io/ioutil"
 
-	"github.com/Nighthawk22/hyperion/pkg/concourse"
-	"github.com/Nighthawk22/hyperion/pkg/led"
-	"github.com/Nighthawk22/hyperion/pkg/prometheus"
-	"github.com/rs/zerolog"
+	"gopkg.in/yaml.v2"
 )
 
 func main() {
-	log := zerolog.New(os.Stdout)
-	ledClient := led.New(led.Config{
-		Normal:  led.RGB{255, 255, 255},
-		Warning: led.RGB{255, 255, 255},
-		Error:   led.RGB{255, 255, 255},
-		Log:     log,
-	})
+	var configPath = flag.String("config", "config.yaml", "Path to configfile")
+	flag.Parse()
+	yamlFile, err := ioutil.ReadFile(*configPath)
 
-	adaptor := ledClient.NewAdaptor()
-	ledStripTop := ledClient.NewLEDStrip(adaptor, "13", "11", "15")
-	ledStripBottom := ledClient.NewLEDStrip(adaptor, "29", "31", "33")
-
-	concourseClient := concourse.New(concourse.Config{
-		URL: "https://taa-ci-01.local.netconomy.net",
-		Log: log,
-	})
-
-	prometheusClient := prometheus.New(prometheus.Config{
-		URL: "https://alertmanager.monitoring.tools.local.netconomy.net",
-		Log: log,
-	})
-
-	for true {
-		prometheusClient.
-			time.Sleep(1 * time.Minute)
+	if err != nil {
+		panic(err)
 	}
 
-}
+	var config Config
 
-//https: //taa-ci-01.local.netconomy.net/api/v1/jobs
+	err = yaml.Unmarshal(yamlFile, &config)
+
+	Run(config)
+}

@@ -1,27 +1,22 @@
 # Hyperion: An LED Alertmanager
 
-Hyperion is used for polling  alerts form the Prometheus
-Alertmanager.  If an alert is found then the color of the LEDs changes to
-red. If there is no alert the color will be blue.
+Hyperion is used for polling alerts form the Prometheus
+Alertmanager and getting build status of the concourse ci server.
 
-Right now two operational modes are supported:
+The idea is to use the dynatrace ufo https://github.com/Dynatrace/ufo-esp32 with a rasperry pi as controller and two led stripes.
+To get led stripes working with the raspberry pi we used this manual https://dordnung.de/raspberrypi-ledstrip/ 
+and added an additional stripe.
 
-## Receiving
+## Prometheus alertmanager
 
-For the push mode add the `--web` flag and a webserver on port 8080 will be
-started.  The webserver waits for payloads similar
-to
-[Prometheus webhooks](https://prometheus.io/docs/alerting/configuration/#webhook-receiver-%3Cwebhook_config%3E) send
-from the Alertmanager. The Alertmanager also has to send resolve requests.
+If an alert is raised the color of the top LED strip changes to error. When there is no alert left it changes back to normal.
 
-## Polling
+## Concourse ci
 
-If you just provide a `--url` flag hyperion will poll the Prometheus
-Alertmanager every 3 seconds for new alerts.
+On an running job the led at the bottom changes to a pulsating warning. When a job has an error state and there 
+is no running job it changes to error. If there is no error job and also no running job the leds change to normal.
 
-## Flags
 
- * `--web`: Starts a webserver waiting for new alerts.
- * `--url`: The url for polling the prometheus
-   alertmanager. E.g. https://alertmanager.example.com
- * `--interval`: Polling interval. Defaults to every 3 seconds.
+## Usage
+
+Build your config file based on `config.example.yaml` and start hyperion with the `--config config.yaml` flag.
