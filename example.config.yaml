@@ -2,17 +2,18 @@ alertmanager:
   url: http://alertmanager.example.com
 concourse:
   url: https://concourse.example.com
+callInterval: 10
 ledStrips:
   top:
     name: CI
-    redPin: "GPIO27"
-    greenPin: "GPIO17"
-    bluePin: "GPIO22"
+    redPin: "13"
+    greenPin: "11"
+    bluePin: "15"
   bottom:
     name: Alerts
-    redPin: "GPIO5"
-    greenPin: "GPIO6"
-    bluePin: "GPIO13"   
+    redPin: "29"
+    greenPin: "31"
+    bluePin: "33"
 colors:
   normal:
     red: 0
