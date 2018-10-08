@@ -18,6 +18,8 @@ import (
 	"os"
 	"time"
 
+	"gobot.io/x/gobot"
+
 	"github.com/Nighthawk22/hyperion/pkg/alertmanager"
 	"github.com/Nighthawk22/hyperion/pkg/concourse"
 	"github.com/Nighthawk22/hyperion/pkg/led"
@@ -37,7 +39,8 @@ type Config struct {
 	Concourse struct {
 		URL string `yaml:"url"`
 	} `yaml:"concourse"`
-	LedStrips struct {
+	CallInterval int `yaml:"callInterval"`
+	LedStrips    struct {
 		Top    LedStripConfig `yaml:"top"`
 		Bottom LedStripConfig `yaml:"bottom"`
 	} `yaml:"ledStrips"`
@@ -64,61 +67,78 @@ func Run(config Config) {
 	adaptor := ledClient.NewAdaptor()
 	ledStripTop := ledClient.NewLEDStrip(adaptor, config.LedStrips.Top.Name, config.LedStrips.Top.RedPin, config.LedStrips.Top.GreenPin, config.LedStrips.Top.BluePin)
 	ledStripBottom := ledClient.NewLEDStrip(adaptor, config.LedStrips.Bottom.Name, config.LedStrips.Bottom.RedPin, config.LedStrips.Bottom.GreenPin, config.LedStrips.Bottom.BluePin)
-
 	concourseClient := concourse.New(concourse.Config{
 		URL: config.Concourse.URL,
 		Log: log,
 	})
-
 	alertManagerClient := alertmanager.New(alertmanager.Config{
 		URL: config.Alertmanager.URL,
 		Log: log,
 	})
 
-	blinkingContext, cancel := context.WithCancel(context.Background())
+	interval := time.Duration(config.CallInterval) * time.Second
 
-	for {
-		log.Info().Msg("Checking concourse")
-		running, errJobs, err := concourseClient.CheckJobs(context.Background())
+	robot := gobot.NewRobot("hyperionBot",
+		[]gobot.Connection{adaptor},
+	)
 
-		if err != nil {
-			log.Error().Err(err).Msg("Could not call concourse")
-			err = ledClient.Error(ledStripBottom)
-		} else {
+	robot.AddDevice(ledStripTop.LedDriver)
+	robot.AddDevice(ledStripBottom.LedDriver)
+
+	work := func() {
+		var pulse *time.Ticker
+		gobot.Every(interval, func() {
+			log.Info().Msg("Checking concourse")
+			running, errJobs, err := concourseClient.CheckJobs(context.Background())
 			if running {
-				ledClient.Pulsating(blinkingContext, ledStripBottom, config.Colors.Warning)
+				log.Info().Msg("Job running, setting to pulsating")
+				if pulse != nil {
+					pulse.Stop()
+				}
+				pulse = ledClient.Pulsating(ledStripBottom, config.Colors.Warning)
 			} else if errJobs {
-				cancel()
+				log.Info().Msg("Job errored, setting to error")
+				if pulse != nil {
+					pulse.Stop()
+				}
 				err = ledClient.Error(ledStripBottom)
 			} else {
-				cancel()
+				log.Info().Msg("Nothing to do yet, setting to normal")
+				if pulse != nil {
+					pulse.Stop()
+				}
 				err = ledClient.Normal(ledStripBottom)
 			}
-		}
+			if err != nil {
+				log.Error().Err(err).Msg("Could not set led strip.")
+			}
+		})
 
-		if err != nil {
-			log.Error().Err(err).Msg("Could not set led strip.")
-		}
+		gobot.Every(interval, func() {
+			log.Info().Msg("Checking alertmanager")
+			promAlert, err := alertManagerClient.CheckAlerts(context.Background())
 
-		log.Info().Msg("Checking prometheus")
-
-		promAlert, err := alertManagerClient.CheckAlerts(context.Background())
-
-		if err != nil {
-			log.Error().Err(err).Msg("Could not call prometheus")
-			err = ledClient.Error(ledStripTop)
-		} else {
-			if promAlert {
+			if err != nil {
+				log.Error().Err(err).Msg("Could not call prometheus")
 				err = ledClient.Error(ledStripTop)
 			} else {
-				err = ledClient.Normal(ledStripTop)
+				if promAlert {
+					log.Info().Msg("Alert, setting to error")
+					err = ledClient.Error(ledStripTop)
+				} else {
+					log.Info().Msg("No Alert, setting to normal")
+					err = ledClient.Normal(ledStripTop)
+				}
 			}
-		}
 
-		if err != nil {
-			log.Error().Err(err).Msg("Could not set led strip.")
-		}
-
-		time.Sleep(1 * time.Minute)
+			if err != nil {
+				log.Error().Err(err).Msg("Could not set led strip.")
+			}
+		})
 	}
+
+	robot.Work = work
+
+	robot.Start()
+
 }

@@ -14,10 +14,10 @@
 package led
 
 import (
-	"context"
 	"time"
 
 	"github.com/rs/zerolog"
+	"gobot.io/x/gobot"
 	"gobot.io/x/gobot/drivers/gpio"
 	"gobot.io/x/gobot/platforms/raspi"
 )
@@ -41,6 +41,7 @@ type Client struct {
 
 type LEDStrip struct {
 	LedDriver *gpio.RgbLedDriver
+	Adaptor   *raspi.Adaptor
 	Name      string
 }
 
@@ -54,48 +55,37 @@ func (c Client) NewAdaptor() *raspi.Adaptor {
 	return raspi.NewAdaptor()
 }
 
-func (c Client) NewLEDStrip(adaptor gpio.DigitalWriter, name string, redPin string, greenPin string, bluePin string) *LEDStrip {
+func (c Client) NewLEDStrip(adaptor *raspi.Adaptor, name string, redPin string, greenPin string, bluePin string) *LEDStrip {
+	ledDriver := gpio.NewRgbLedDriver(adaptor, redPin, greenPin, bluePin)
+	ledDriver.SetName(name)
 	return &LEDStrip{
-		LedDriver: gpio.NewRgbLedDriver(adaptor, redPin, greenPin, bluePin),
+		LedDriver: ledDriver,
+		Adaptor:   adaptor,
 		Name:      name,
 	}
 }
 
-func (c Client) On(led *LEDStrip) error {
-	c.config.Log.Info().Str("led", led.Name).Msg("Setting to on")
-	return led.LedDriver.On()
-}
-
 func (c Client) Normal(led *LEDStrip) error {
-	c.config.Log.Info().Str("led", led.Name).Msg("Setting to normal")
+	c.config.Log.Info().Str("led", led.LedDriver.Name()).Msg("Setting to normal")
 	return led.LedDriver.SetRGB(c.config.Normal.Red, c.config.Normal.Green, c.config.Normal.Blue)
 }
 
 func (c Client) Warning(led *LEDStrip) error {
-	c.config.Log.Info().Str("led", led.Name).Msg("Setting to warning")
+	c.config.Log.Info().Str("led", led.LedDriver.Name()).Msg("Setting to warning")
 	return led.LedDriver.SetRGB(c.config.Warning.Red, c.config.Warning.Green, c.config.Warning.Blue)
 }
 
 func (c Client) Error(led *LEDStrip) error {
-	c.config.Log.Info().Str("led", led.Name).Msg("Setting to error")
+	c.config.Log.Info().Str("led", led.LedDriver.Name()).Msg("Setting to error")
 	return led.LedDriver.SetRGB(c.config.Error.Red, c.config.Error.Green, c.config.Error.Blue)
 }
 
-//TODO: Use cancelcontext
-func (c Client) Pulsating(ctx context.Context, led *LEDStrip, rgb RGB) {
+func (c Client) Pulsating(led *LEDStrip, rgb RGB) *time.Ticker {
+	c.config.Log.Info().Str("led", led.LedDriver.Name()).Msg("Setting to pulsating")
 	led.LedDriver.SetRGB(rgb.Red, rgb.Green, rgb.Blue)
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		default:
-			pulse(led)
-		}
+	return gobot.Every(1*time.Second, func() {
+		c.config.Log.Info().Msg("Toggle")
+		led.LedDriver.Toggle()
+	})
 
-	}
-}
-
-func pulse(led *LEDStrip) {
-	time.Sleep(2 * time.Second)
-	led.LedDriver.Toggle()
 }
